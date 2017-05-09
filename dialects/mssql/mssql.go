@@ -50,7 +50,7 @@ func (s *mssql) SetDB(db gorm.SQLCommon) {
 }
 
 func (mssql) BindVar(i int) string {
-	return "$$" // ?
+	return "$$$" // ?
 }
 
 func (mssql) Quote(key string) string {
@@ -81,21 +81,21 @@ func (s *mssql) DataTypeOf(field *gorm.StructField) string {
 		case reflect.Float32, reflect.Float64:
 			sqlType = "float"
 		case reflect.String:
-			if size > 0 && size < 65532 {
+			if size > 0 && size < 8000 {
 				sqlType = fmt.Sprintf("nvarchar(%d)", size)
 			} else {
-				sqlType = "text"
+				sqlType = "nvarchar(max)"
 			}
 		case reflect.Struct:
 			if _, ok := dataValue.Interface().(time.Time); ok {
 				sqlType = "datetime2"
 			}
 		default:
-			if _, ok := dataValue.Interface().([]byte); ok {
-				if size > 0 && size < 65532 {
-					sqlType = fmt.Sprintf("varchar(%d)", size)
+			if gorm.IsByteArrayOrSlice(dataValue) {
+				if size > 0 && size < 8000 {
+					sqlType = fmt.Sprintf("varbinary(%d)", size)
 				} else {
-					sqlType = "text"
+					sqlType = "varbinary(max)"
 				}
 			}
 		}
@@ -145,12 +145,12 @@ func (s mssql) CurrentDatabase() (name string) {
 
 func (mssql) LimitAndOffsetSQL(limit, offset interface{}) (sql string) {
 	if offset != nil {
-		if parsedOffset, err := strconv.ParseInt(fmt.Sprint(offset), 0, 0); err == nil && parsedOffset > 0 {
+		if parsedOffset, err := strconv.ParseInt(fmt.Sprint(offset), 0, 0); err == nil && parsedOffset >= 0 {
 			sql += fmt.Sprintf(" OFFSET %d ROWS", parsedOffset)
 		}
 	}
 	if limit != nil {
-		if parsedLimit, err := strconv.ParseInt(fmt.Sprint(limit), 0, 0); err == nil && parsedLimit > 0 {
+		if parsedLimit, err := strconv.ParseInt(fmt.Sprint(limit), 0, 0); err == nil && parsedLimit >= 0 {
 			if sql == "" {
 				// add default zero offset
 				sql += " OFFSET 0 ROWS"
