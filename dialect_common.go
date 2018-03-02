@@ -38,6 +38,13 @@ func (commonDialect) Quote(key string) string {
 	return fmt.Sprintf(`"%s"`, key)
 }
 
+func (s *commonDialect) fieldCanAutoIncrement(field *StructField) bool {
+	if value, ok := field.TagSettings["AUTO_INCREMENT"]; ok {
+		return strings.ToLower(value) != "false"
+	}
+	return field.IsPrimaryKey
+}
+
 func (s *commonDialect) DataTypeOf(field *StructField) string {
 	var dataValue, sqlType, size, additionalType = ParseFieldStructForDialect(field, s)
 
@@ -46,13 +53,13 @@ func (s *commonDialect) DataTypeOf(field *StructField) string {
 		case reflect.Bool:
 			sqlType = "BOOLEAN"
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uintptr:
-			if _, ok := field.TagSettings["AUTO_INCREMENT"]; ok {
+			if s.fieldCanAutoIncrement(field) {
 				sqlType = "INTEGER AUTO_INCREMENT"
 			} else {
 				sqlType = "INTEGER"
 			}
 		case reflect.Int64, reflect.Uint64:
-			if _, ok := field.TagSettings["AUTO_INCREMENT"]; ok {
+			if s.fieldCanAutoIncrement(field) {
 				sqlType = "BIGINT AUTO_INCREMENT"
 			} else {
 				sqlType = "BIGINT"
@@ -120,6 +127,11 @@ func (s commonDialect) HasColumn(tableName string, columnName string) bool {
 	return count > 0
 }
 
+func (s commonDialect) ModifyColumn(tableName string, columnName string, typ string) error {
+	_, err := s.db.Exec(fmt.Sprintf("ALTER TABLE %v ALTER COLUMN %v TYPE %v", tableName, columnName, typ))
+	return err
+}
+
 func (s commonDialect) CurrentDatabase() (name string) {
 	s.db.QueryRow("SELECT DATABASE()").Scan(&name)
 	return
@@ -145,6 +157,10 @@ func (commonDialect) SelectFromDummyTable() string {
 
 func (commonDialect) LastInsertIDReturningSuffix(tableName, columnName string) string {
 	return ""
+}
+
+func (commonDialect) DefaultValueStr() string {
+	return "DEFAULT VALUES"
 }
 
 // BuildKeyName returns a valid key name (foreign key, index key) for the given table, field and reference
